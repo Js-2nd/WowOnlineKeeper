@@ -9,7 +9,13 @@
 
 	class Program
 	{
-		static async Task Main() => await new Program().Run();
+		public const string Version = "0.1.0";
+
+		static async Task Main()
+		{
+			Console.WriteLine($"WowOnlineKeeper v{Version}");
+			await new Program().Run();
+		}
 
 		readonly InputSystem m_Input = new InputSystem();
 		readonly Random m_Random = new Random();
@@ -87,22 +93,24 @@
 		{
 			if (key == VirtualKey.VK_NO_KEY) return;
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
-			await Task.Delay(20);
+			await Task.Delay(50);
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
 		}
 
 		public async Task Click(Point point)
 		{
 			GetCursorPos(out var pos);
-			await Task.Delay(10);
+			await Task.Delay(25);
 			POINT pt = point;
 			ClientToScreen(Process.MainWindowHandle, ref pt);
 			SetCursorPos(pt.x, pt.y);
+			await Task.Delay(25);
 			var lParam = point.ToLParam();
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_MOUSEMOVE, IntPtr.Zero, lParam);
+			await Task.Delay(25);
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_LBUTTONDOWN, (IntPtr) 1, lParam);
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_LBUTTONUP, IntPtr.Zero, lParam);
-			await Task.Delay(20);
+			await Task.Delay(25);
 			SetCursorPos(pos.x, pos.y);
 		}
 	}
