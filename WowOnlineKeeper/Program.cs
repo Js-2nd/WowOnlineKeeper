@@ -94,6 +94,7 @@
 		public async Task Click(Point point)
 		{
 			GetCursorPos(out var pos);
+			await Task.Delay(10);
 			POINT pt = point;
 			ClientToScreen(Process.MainWindowHandle, ref pt);
 			SetCursorPos(pt.x, pt.y);
