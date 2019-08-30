@@ -1,5 +1,6 @@
 ﻿namespace WowOnlineKeeper
 {
+	using PInvoke;
 	using System;
 	using System.Collections.Generic;
 	using System.Diagnostics;
@@ -18,7 +19,11 @@
 
 		async Task Run()
 		{
-			m_Input.KeyDown += OnKeyDown;
+			m_Input.KeyDown += _ => OnUserInput();
+			m_Input.Mouse += (type, point) =>
+			{
+				if (type != WindowMessage.WM_MOUSEMOVE) OnUserInput();
+			};
 			while (true)
 			{
 				m_Now = DateTime.UtcNow;
@@ -27,9 +32,10 @@
 				{
 					if (m_Now - item.LastInputTime >= TimeSpan.FromSeconds(5))
 					{
+						Console.WriteLine(DateTime.Now);
 						item.LastInputTime = m_Now;
 						GetWindowRect(item.Process.MainWindowHandle, out var rect);
-						await item.Click(((rect.right - rect.left) / 2, rect.bottom - rect.top - 90));
+						await item.Click(((rect.right - rect.left) / 2, (int) ((rect.bottom - rect.top) * 0.917)));
 						await item.Key(RandomKey());
 					}
 				}
@@ -38,7 +44,7 @@
 			}
 		}
 
-		void OnKeyDown(VirtualKey key)
+		void OnUserInput()
 		{
 			GetWindowThreadProcessId(GetForegroundWindow(), out int processId);
 			if (m_Items.TryGetValue(processId, out var item)) item.LastInputTime = m_Now;
@@ -60,11 +66,13 @@
 
 		VirtualKey RandomKey()
 		{
-			switch (m_Random.Next(3))
+			switch (m_Random.Next(5))
 			{
-				case 0: return VirtualKey.VK_SPACE;
-				case 1: return VirtualKey.VK_S;
-				case 2: return VirtualKey.VK_W;
+				case 0:
+				case 1: return VirtualKey.VK_SPACE;
+				case 2:
+				case 3: return VirtualKey.VK_S;
+				case 4: return VirtualKey.VK_W;
 				default: return VirtualKey.VK_NO_KEY;
 			}
 		}
@@ -75,20 +83,26 @@
 		public Process Process;
 		public DateTime LastInputTime;
 
-		public async Task Key(VirtualKey key, int duration = 100)
+		public async Task Key(VirtualKey key)
 		{
 			if (key == VirtualKey.VK_NO_KEY) return;
-			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
-			await Task.Delay(duration);
-			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
+			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
+			await Task.Delay(20);
+			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
 		}
 
-		public async Task Click(Point point, int duration = 100)
+		public async Task Click(Point point)
 		{
+			GetCursorPos(out var pos);
+			POINT pt = point;
+			ClientToScreen(Process.MainWindowHandle, ref pt);
+			SetCursorPos(pt.x, pt.y);
 			var lParam = point.ToLParam();
-			PostMessage(Process.Handle, WindowMessage.WM_LBUTTONDOWN, (IntPtr) 1, lParam);
-			await Task.Delay(duration);
-			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYUP, IntPtr.Zero, lParam);
+			PostMessage(Process.MainWindowHandle, WindowMessage.WM_MOUSEMOVE, IntPtr.Zero, lParam);
+			PostMessage(Process.MainWindowHandle, WindowMessage.WM_LBUTTONDOWN, (IntPtr) 1, lParam);
+			PostMessage(Process.MainWindowHandle, WindowMessage.WM_LBUTTONUP, IntPtr.Zero, lParam);
+			await Task.Delay(20);
+			SetCursorPos(pos.x, pos.y);
 		}
 	}
 }

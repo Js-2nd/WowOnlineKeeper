@@ -27,5 +27,6 @@ namespace WowOnlineKeeper
 
 		public static implicit operator Point(in Tuple t) => new Point(t);
 		public static implicit operator Point(in POINT p) => (p.x, p.y);
+		public static implicit operator POINT(in Point p) => new POINT {x = p.X, y = p.Y};
 	}
 }

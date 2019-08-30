@@ -12,6 +12,7 @@ namespace WowOnlineKeeper
 		public event Action<VirtualKey> KeyDown;
 		public event Action<VirtualKey> KeyHold;
 		public event Action<VirtualKey> KeyUp;
+		public event Action<WindowMessage, Point> Mouse;
 		public bool IsDisposed { get; private set; }
 
 		readonly WindowMessage m_StopMessage;
@@ -20,6 +21,8 @@ namespace WowOnlineKeeper
 		int m_HookThreadId;
 		WindowsHookDelegate m_HookProc;
 		SafeHookHandle m_Hook;
+		WindowsHookDelegate m_MouseHookProc;
+		SafeHookHandle m_MouseHook;
 
 		public InputSystem(WindowMessage stopMessage = WindowMessage.WM_USER)
 		{
@@ -79,6 +82,8 @@ namespace WowOnlineKeeper
 				m_HookThreadId = Kernel32.GetCurrentThreadId();
 				m_HookProc = LowLevelKeyboardProc;
 				m_Hook = SetWindowsHookEx(WindowsHookType.WH_KEYBOARD_LL, m_HookProc, IntPtr.Zero, 0);
+				m_MouseHookProc = LowLevelMouseProc;
+				m_MouseHook = SetWindowsHookEx(WindowsHookType.WH_MOUSE_LL, m_MouseHookProc, IntPtr.Zero, 0);
 				MessageLoop();
 			}
 			catch (Exception ex)
@@ -104,6 +109,23 @@ namespace WowOnlineKeeper
 			return CallNextHookEx(m_Hook.DangerousGetHandle(), nCode, wParam, lParam);
 		}
 
+		int LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam)
+		{
+			if (nCode >= 0)
+			{
+				try
+				{
+					Mouse?.Invoke((WindowMessage) wParam, Marshal.PtrToStructure<POINT>(lParam));
+				}
+				catch (Exception ex)
+				{
+					Console.Error.WriteLine(ex);
+				}
+			}
+
+			return CallNextHookEx(m_MouseHook.DangerousGetHandle(), nCode, wParam, lParam);
+		}
+
 		unsafe void MessageLoop()
 		{
 			MSG msg;
@@ -120,6 +142,7 @@ namespace WowOnlineKeeper
 			if (IsDisposed) return;
 			IsDisposed = true;
 			m_Hook.Dispose();
+			m_MouseHook.Dispose();
 			PostThreadMessage(m_HookThreadId, m_StopMessage, IntPtr.Zero, IntPtr.Zero);
 			m_Channel.Writer.TryComplete();
 		}
