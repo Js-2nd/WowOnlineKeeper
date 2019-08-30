@@ -26,6 +26,8 @@
 					if (m_Now - item.LastInputTime >= TimeSpan.FromSeconds(5))
 					{
 						item.LastInputTime = m_Now;
+						GetWindowRect(item.Process.MainWindowHandle, out var rect);
+						await item.Click(((rect.right - rect.left) / 2, rect.bottom - rect.top - 90));
 						await item.Key(VirtualKey.VK_SPACE);
 					}
 				}
@@ -46,7 +48,8 @@
 			foreach (var process in Process.GetProcessesByName("Wow"))
 			{
 				int processId = process.Id;
-				if (!m_Items.TryGetValue(processId, out var item)) item = new Item {LastInputTime = m_Now};
+				if (!m_Items.TryGetValue(processId, out var item))
+					item = new Item {Process = process, LastInputTime = m_Now};
 				m_ItemsBuf[processId] = item;
 			}
 
@@ -64,6 +67,14 @@
 			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
 			await Task.Delay(duration);
 			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
+		}
+
+		public async Task Click(Point point, int duration = 100)
+		{
+			var lParam = point.ToLParam();
+			PostMessage(Process.Handle, WindowMessage.WM_LBUTTONDOWN, (IntPtr) 1, lParam);
+			await Task.Delay(duration);
+			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYUP, IntPtr.Zero, lParam);
 		}
 	}
 }
