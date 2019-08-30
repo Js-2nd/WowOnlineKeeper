@@ -6,16 +6,18 @@
 	using System.Threading.Tasks;
 	using static PInvoke.User32;
 
-	static class Program
+	class Program
 	{
-		static InputSystem m_Input;
-		static Dictionary<int, Item> m_Items = new Dictionary<int, Item>();
-		static Dictionary<int, Item> m_ItemsBuf = new Dictionary<int, Item>();
-		static DateTime m_Now;
+		static async Task Main() => await new Program().Run();
 
-		public static async Task Main()
+		readonly InputSystem m_Input = new InputSystem();
+		readonly Random m_Random = new Random();
+		Dictionary<int, Item> m_Items = new Dictionary<int, Item>();
+		Dictionary<int, Item> m_ItemsBuf = new Dictionary<int, Item>();
+		DateTime m_Now;
+
+		async Task Run()
 		{
-			m_Input = new InputSystem();
 			m_Input.KeyDown += OnKeyDown;
 			while (true)
 			{
@@ -28,7 +30,7 @@
 						item.LastInputTime = m_Now;
 						GetWindowRect(item.Process.MainWindowHandle, out var rect);
 						await item.Click(((rect.right - rect.left) / 2, rect.bottom - rect.top - 90));
-						await item.Key(VirtualKey.VK_SPACE);
+						await item.Key(RandomKey());
 					}
 				}
 
@@ -36,13 +38,13 @@
 			}
 		}
 
-		static void OnKeyDown(VirtualKey key)
+		void OnKeyDown(VirtualKey key)
 		{
 			GetWindowThreadProcessId(GetForegroundWindow(), out int processId);
 			if (m_Items.TryGetValue(processId, out var item)) item.LastInputTime = m_Now;
 		}
 
-		static void UpdateItems()
+		void UpdateItems()
 		{
 			m_ItemsBuf.Clear();
 			foreach (var process in Process.GetProcessesByName("Wow"))
@@ -55,6 +57,17 @@
 
 			(m_Items, m_ItemsBuf) = (m_ItemsBuf, m_Items);
 		}
+
+		VirtualKey RandomKey()
+		{
+			switch (m_Random.Next(3))
+			{
+				case 0: return VirtualKey.VK_SPACE;
+				case 1: return VirtualKey.VK_S;
+				case 2: return VirtualKey.VK_W;
+				default: return VirtualKey.VK_NO_KEY;
+			}
+		}
 	}
 
 	class Item
@@ -64,6 +77,7 @@
 
 		public async Task Key(VirtualKey key, int duration = 100)
 		{
+			if (key == VirtualKey.VK_NO_KEY) return;
 			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
 			await Task.Delay(duration);
 			PostMessage(Process.Handle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
