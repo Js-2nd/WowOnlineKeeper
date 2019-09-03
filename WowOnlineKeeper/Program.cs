@@ -21,13 +21,13 @@
 		readonly Random m_Random = new Random();
 		Dictionary<int, Game> m_Games = new Dictionary<int, Game>();
 		Dictionary<int, Game> m_GamesSwap = new Dictionary<int, Game>();
-		DateTime m_SystemLastInputTime = DateTime.Now;
+		DateTime m_LastMouseMoveTime = DateTime.Now;
 		DateTime m_Now;
 
 		async Task Run()
 		{
-			m_Input.KeyDown += _ => OnUserInput(true);
-			m_Input.Mouse += (type, point) => OnUserInput(type != WindowMessage.WM_MOUSEMOVE);
+			m_Input.KeyDown += _ => OnUserInput(false);
+			m_Input.Mouse += (type, point) => OnUserInput(type == WindowMessage.WM_MOUSEMOVE);
 			while (true)
 			{
 				m_Now = DateTime.Now;
@@ -40,9 +40,9 @@
 						act = true;
 						var keySet = s_KeySets[m_Random.Next(s_KeySets.Length)];
 						var key = keySet[m_Random.Next(keySet.Length)];
-						Console.WriteLine($"{m_Now}\t{key}");
+						Console.WriteLine($"{m_Now.ToString()}\t{ToString(key)}");
 						await game.Key(key, 500);
-						if (m_Now - m_SystemLastInputTime >= TimeSpan.FromSeconds(30))
+						if (m_Now - m_LastMouseMoveTime >= TimeSpan.FromSeconds(30))
 						{
 							GetWindowRect(game.Process.MainWindowHandle, out var rect);
 							Point point = ((rect.right - rect.left) / 2, (int) ((rect.bottom - rect.top) * 0.917));
@@ -55,13 +55,14 @@
 			}
 		}
 
-		void OnUserInput(bool updateGame)
+		void OnUserInput(bool isMouseMove)
 		{
-			m_SystemLastInputTime = m_Now;
-			if (!updateGame) return;
-			GetWindowThreadProcessId(GetForegroundWindow(), out int processId);
-			if (!m_Games.TryGetValue(processId, out var item)) return;
-			item.LastInputTime = m_Now;
+			if (isMouseMove) m_LastMouseMoveTime = m_Now;
+			else
+			{
+				GetWindowThreadProcessId(GetForegroundWindow(), out int processId);
+				if (m_Games.TryGetValue(processId, out var item)) item.LastInputTime = m_Now;
+			}
 		}
 
 		void UpdateGames()
@@ -97,6 +98,21 @@
 				VirtualKey.VK_KEY_4,
 			},
 		};
+
+		static string ToString(VirtualKey key)
+		{
+			int index = 3;
+			if (key >= VirtualKey.VK_KEY_1 && key <= VirtualKey.VK_KEY_9) index = 7;
+			return key.ToString().Substring(index);
+		}
+
+		static VirtualKey Parse(string str)
+		{
+			if (str.Length == 1 && str[0] >= '0' && str[0] <= '9') str = "KEY_" + str;
+			str = "VK_" + str;
+			Enum.TryParse<VirtualKey>(str, out var key);
+			return key;
+		}
 	}
 
 	class Game
