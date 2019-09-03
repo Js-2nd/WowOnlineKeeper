@@ -19,9 +19,9 @@
 
 		readonly InputSystem m_Input = new InputSystem();
 		readonly Random m_Random = new Random();
-		Dictionary<int, Item> m_Items = new Dictionary<int, Item>();
-		Dictionary<int, Item> m_ItemsAlt = new Dictionary<int, Item>();
-		DateTime m_LastInputTime = DateTime.Now;
+		Dictionary<int, Game> m_Games = new Dictionary<int, Game>();
+		Dictionary<int, Game> m_GamesSwap = new Dictionary<int, Game>();
+		DateTime m_SystemLastInputTime = DateTime.Now;
 		DateTime m_Now;
 
 		async Task Run()
@@ -31,77 +31,80 @@
 			while (true)
 			{
 				m_Now = DateTime.Now;
-				UpdateItems();
-				foreach (var item in m_Items.Values)
+				UpdateGames();
+				bool act = false;
+				foreach (var game in m_Games.Values)
 				{
-					bool afk = m_Now - item.LastInputTime >= TimeSpan.FromMinutes(2);
-					if (m_Now - item.LastActionTime >= TimeSpan.FromSeconds(afk ? 2 : 30))
+					if (m_Now - game.LastInputTime >= TimeSpan.FromSeconds(30))
 					{
-						item.LastActionTime = m_Now;
-						var key = afk ? s_Keys[m_Random.Next(s_Keys.Length)] : VirtualKey.VK_SPACE;
+						act = true;
+						var keySet = s_KeySets[m_Random.Next(s_KeySets.Length)];
+						var key = keySet[m_Random.Next(keySet.Length)];
 						Console.WriteLine($"{m_Now}\t{key}");
-						await item.Key(key, afk ? 500 : 50);
-						if (m_Now - m_LastInputTime >= TimeSpan.FromMinutes(2))
+						await game.Key(key, 500);
+						if (m_Now - m_SystemLastInputTime >= TimeSpan.FromSeconds(30))
 						{
-							GetWindowRect(item.Process.MainWindowHandle, out var rect);
+							GetWindowRect(game.Process.MainWindowHandle, out var rect);
 							Point point = ((rect.right - rect.left) / 2, (int) ((rect.bottom - rect.top) * 0.917));
-							await item.Click(point, 200);
+							await game.Click(point, 200);
 						}
 					}
 				}
 
-				await Task.Delay(TimeSpan.FromSeconds(1));
+				if (!act) await Task.Delay(TimeSpan.FromSeconds(1));
 			}
 		}
 
-		void OnUserInput(bool updateItem)
+		void OnUserInput(bool updateGame)
 		{
-			m_LastInputTime = m_Now;
-			if (!updateItem) return;
+			m_SystemLastInputTime = m_Now;
+			if (!updateGame) return;
 			GetWindowThreadProcessId(GetForegroundWindow(), out int processId);
-			if (!m_Items.TryGetValue(processId, out var item)) return;
+			if (!m_Games.TryGetValue(processId, out var item)) return;
 			item.LastInputTime = m_Now;
-			item.LastActionTime = m_Now;
 		}
 
-		void UpdateItems()
+		void UpdateGames()
 		{
-			m_ItemsAlt.Clear();
+			m_GamesSwap.Clear();
 			foreach (var process in Process.GetProcessesByName("Wow"))
 			{
 				int processId = process.Id;
-				if (!m_Items.TryGetValue(processId, out var item))
-					item = new Item {Process = process, LastInputTime = m_Now, LastActionTime = m_Now};
-				m_ItemsAlt[processId] = item;
+				if (!m_Games.TryGetValue(processId, out var item))
+					item = new Game {Process = process, LastInputTime = m_Now};
+				m_GamesSwap[processId] = item;
 			}
 
-			(m_Items, m_ItemsAlt) = (m_ItemsAlt, m_Items);
+			(m_Games, m_GamesSwap) = (m_GamesSwap, m_Games);
 		}
 
-		static readonly VirtualKey[] s_Keys =
+		static readonly VirtualKey[][] s_KeySets =
 		{
-			VirtualKey.VK_SPACE,
-			VirtualKey.VK_W,
-			VirtualKey.VK_S,
-			VirtualKey.VK_A,
-			VirtualKey.VK_D,
-			VirtualKey.VK_Q,
-			VirtualKey.VK_E,
-			VirtualKey.VK_OEM_3,
-			VirtualKey.VK_KEY_1,
-			VirtualKey.VK_KEY_2,
-			VirtualKey.VK_KEY_3,
-			VirtualKey.VK_KEY_4,
+			new[]
+			{
+				VirtualKey.VK_W,
+				VirtualKey.VK_A,
+				VirtualKey.VK_D,
+			},
+			new[]
+			{
+				VirtualKey.VK_OEM_3,
+				VirtualKey.VK_Q,
+				VirtualKey.VK_E,
+				VirtualKey.VK_KEY_1,
+				VirtualKey.VK_KEY_2,
+				VirtualKey.VK_KEY_3,
+				VirtualKey.VK_KEY_4,
+			},
 		};
 	}
 
-	class Item
+	class Game
 	{
 		public Process Process;
 		public DateTime LastInputTime;
-		public DateTime LastActionTime;
 
-		public async Task Key(VirtualKey key, int delay = 50)
+		public async Task Key(VirtualKey key, int delay)
 		{
 			if (key == VirtualKey.VK_NO_KEY) return;
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
@@ -109,7 +112,7 @@
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
 		}
 
-		public async Task Click(Point point, int delay = 50)
+		public async Task Click(Point point, int delay)
 		{
 			GetCursorPos(out var pos);
 			POINT pt = point;
