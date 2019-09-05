@@ -76,6 +76,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Config.cs" />
+    <Compile Include="Extensions.cs" />
     <Compile Include="InputSystem.cs" />
     <Compile Include="Point.cs" />
     <Compile Include="Program.cs" />

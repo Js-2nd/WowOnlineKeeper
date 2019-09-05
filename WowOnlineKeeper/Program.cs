@@ -4,12 +4,15 @@
 	using System;
 	using System.Collections.Generic;
 	using System.Diagnostics;
+	using System.Globalization;
+	using System.IO;
 	using System.Threading.Tasks;
 	using static PInvoke.User32;
 
 	public sealed class Program
 	{
-		public const string Version = "0.1.2";
+		public const string Version = "0.2.0";
+		const string ConfigPath = nameof(WowOnlineKeeper) + ".ini";
 
 		static async Task Main()
 		{
@@ -17,17 +20,18 @@
 			await new Program().Run();
 		}
 
-		readonly InputSystem m_Input = new InputSystem();
 		readonly Random m_Random = new Random();
 		Dictionary<int, Game> m_Games = new Dictionary<int, Game>();
 		Dictionary<int, Game> m_GamesSwap = new Dictionary<int, Game>();
+		Config m_Config;
+		InputSystem m_Input;
 		DateTime m_LastMouseMoveTime = DateTime.Now;
 		DateTime m_Now;
 
 		async Task Run()
 		{
-			m_Input.KeyDown += _ => OnUserInput(false);
-			m_Input.Mouse += (type, point) => OnUserInput(type == WindowMessage.WM_MOUSEMOVE);
+			LoadConfig();
+			InitInput();
 			while (true)
 			{
 				m_Now = DateTime.Now;
@@ -38,10 +42,10 @@
 					if (m_Now - game.LastInputTime >= TimeSpan.FromSeconds(30))
 					{
 						act = true;
-						var keySet = s_KeySets[m_Random.Next(s_KeySets.Length)];
-						var key = keySet[m_Random.Next(keySet.Length)];
-						Console.WriteLine($"{m_Now.ToString()}\t{ToString(key)}");
-						await game.Key(key, 500);
+						var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
+						var keyConfig = keySet[m_Random.Next(keySet.Count)];
+						Console.WriteLine($"{m_Now.ToString(DateTimeFormatInfo.CurrentInfo)}\t{keyConfig}");
+						await game.Key(keyConfig);
 						if (m_Now - m_LastMouseMoveTime >= TimeSpan.FromSeconds(30))
 						{
 							GetWindowRect(game.Process.MainWindowHandle, out var rect);
@@ -52,6 +56,26 @@
 				}
 
 				if (!act) await Task.Delay(TimeSpan.FromSeconds(1));
+			}
+		}
+
+		void LoadConfig()
+		{
+			if (!File.Exists(ConfigPath)) Config.Parser.WriteFile(ConfigPath, Config.Default);
+			m_Config = new Config(ConfigPath);
+		}
+
+		void InitInput()
+		{
+			try
+			{
+				m_Input = new InputSystem();
+				m_Input.KeyDown += _ => OnUserInput(false);
+				m_Input.Mouse += (type, point) => OnUserInput(type == WindowMessage.WM_MOUSEMOVE);
+			}
+			catch (Exception ex)
+			{
+				Console.Error.WriteLine(ex);
 			}
 		}
 
@@ -78,41 +102,6 @@
 
 			(m_Games, m_GamesSwap) = (m_GamesSwap, m_Games);
 		}
-
-		static readonly VirtualKey[][] s_KeySets =
-		{
-			new[]
-			{
-				VirtualKey.VK_W,
-				VirtualKey.VK_A,
-				VirtualKey.VK_D,
-			},
-			new[]
-			{
-				VirtualKey.VK_OEM_3,
-				VirtualKey.VK_Q,
-				VirtualKey.VK_E,
-				VirtualKey.VK_KEY_1,
-				VirtualKey.VK_KEY_2,
-				VirtualKey.VK_KEY_3,
-				VirtualKey.VK_KEY_4,
-			},
-		};
-
-		static string ToString(VirtualKey key)
-		{
-			int index = 3;
-			if (key >= VirtualKey.VK_KEY_1 && key <= VirtualKey.VK_KEY_9) index = 7;
-			return key.ToString().Substring(index);
-		}
-
-		static VirtualKey Parse(string str)
-		{
-			if (str.Length == 1 && str[0] >= '0' && str[0] <= '9') str = "KEY_" + str;
-			str = "VK_" + str;
-			Enum.TryParse<VirtualKey>(str, out var key);
-			return key;
-		}
 	}
 
 	class Game
@@ -120,11 +109,32 @@
 		public Process Process;
 		public DateTime LastInputTime;
 
-		public async Task Key(VirtualKey key, int delay)
+		public async Task Key(KeyConfig config)
+		{
+			if (config.Ctrl) KeyDown(VirtualKey.VK_LCONTROL);
+			if (config.Shift) KeyDown(VirtualKey.VK_LSHIFT);
+			if (config.Alt) KeyDown(VirtualKey.VK_LMENU);
+			await Key(config.Key, config.Duration);
+			if (config.Ctrl) KeyUp(VirtualKey.VK_LCONTROL);
+			if (config.Shift) KeyUp(VirtualKey.VK_LSHIFT);
+			if (config.Alt) KeyUp(VirtualKey.VK_LMENU);
+		}
+
+		public async Task Key(VirtualKey key, int duration)
 		{
 			if (key == VirtualKey.VK_NO_KEY) return;
+			KeyDown(key);
+			await Task.Delay(duration);
+			KeyUp(key);
+		}
+
+		public void KeyDown(VirtualKey key)
+		{
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
-			await Task.Delay(delay);
+		}
+
+		public void KeyUp(VirtualKey key)
+		{
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
 		}
 
