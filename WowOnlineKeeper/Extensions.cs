@@ -1,5 +1,6 @@
 namespace WowOnlineKeeper
 {
+	using IniParser.Model;
 	using System;
 	using static PInvoke.User32;
 
@@ -66,6 +67,21 @@ namespace WowOnlineKeeper
 			}
 
 			return Enum.TryParse<VirtualKey>("VK_" + str, out var key) ? key : VirtualKey.VK_NO_KEY;
+		}
+
+		public static KeyData GetKeyData(this KeyDataCollection collection, string key, string section)
+		{
+			var data = collection.GetKeyData(key);
+			if (data != null) return data;
+			Console.Error.WriteLine($"Entry not found: [{section}] {key}");
+			return null;
+		}
+
+		public static double? ParseNum(this KeyData data, string section)
+		{
+			if (double.TryParse(data.Value, out double num)) return num;
+			Console.Error.WriteLine($"Invalid number: {data.Value} at [{section}] {data.KeyName}");
+			return null;
 		}
 	}
 }

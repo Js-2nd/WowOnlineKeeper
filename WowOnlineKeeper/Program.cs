@@ -4,8 +4,6 @@
 	using System;
 	using System.Collections.Generic;
 	using System.Diagnostics;
-	using System.Globalization;
-	using System.IO;
 	using System.Threading.Tasks;
 	using static PInvoke.User32;
 
@@ -30,7 +28,7 @@
 
 		async Task Run()
 		{
-			LoadConfig();
+			m_Config = new Config(ConfigPath);
 			InitInput();
 			while (true)
 			{
@@ -44,25 +42,19 @@
 						act = true;
 						var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
 						var keyConfig = keySet[m_Random.Next(keySet.Count)];
-						Console.WriteLine($"{m_Now.ToString(DateTimeFormatInfo.CurrentInfo)}\t{keyConfig}");
+						Console.WriteLine($"{m_Now.ToString()}\t{keyConfig}");
 						await game.Key(keyConfig);
 						if (m_Now - m_LastMouseMoveTime >= TimeSpan.FromSeconds(30))
 						{
 							GetWindowRect(game.Process.MainWindowHandle, out var rect);
 							Point point = ((rect.right - rect.left) / 2, (int) ((rect.bottom - rect.top) * 0.917));
-							await game.Click(point, 200);
+							await game.Click(point, TimeSpan.FromSeconds(0.2));
 						}
 					}
 				}
 
 				if (!act) await Task.Delay(TimeSpan.FromSeconds(1));
 			}
-		}
-
-		void LoadConfig()
-		{
-			if (!File.Exists(ConfigPath)) Config.Parser.WriteFile(ConfigPath, Config.Default);
-			m_Config = new Config(ConfigPath);
 		}
 
 		void InitInput()
@@ -120,7 +112,7 @@
 			if (config.Alt) KeyUp(VirtualKey.VK_LMENU);
 		}
 
-		public async Task Key(VirtualKey key, int duration)
+		public async Task Key(VirtualKey key, TimeSpan duration)
 		{
 			if (key == VirtualKey.VK_NO_KEY) return;
 			KeyDown(key);
@@ -138,7 +130,7 @@
 			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
 		}
 
-		public async Task Click(Point point, int delay)
+		public async Task Click(Point point, TimeSpan delay)
 		{
 			GetCursorPos(out var pos);
 			POINT pt = point;

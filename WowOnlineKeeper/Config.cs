@@ -4,53 +4,77 @@ namespace WowOnlineKeeper
 	using IniParser.Model;
 	using System;
 	using System.Collections.Generic;
+	using System.IO;
 	using System.Linq;
 	using System.Text;
 	using static PInvoke.User32;
 
 	public class Config
 	{
+		public const string ConfigSectionName = nameof(Config);
+
 		public static readonly FileIniDataParser Parser = new FileIniDataParser();
 
-		public static IniData Default
+		public static readonly Config Default = new Config
 		{
-			get
-			{
-				var data = new IniData();
-				var set = data["KeySet0"];
-				set["W"] = "700";
-				set["A"] = "300";
-				set["D"] = "300";
-				set = data["KeySet1"];
-				set["1"] = "100";
-				set["2"] = "100";
-				set["F1"] = "100";
-				set["Ctrl | Tab"] = "100";
-				set["Shift | Q"] = "2000";
-				set["Alt | E"] = "100";
-				set["Ctrl | Shift | Alt | `"] = "100";
-				return data;
-			}
+			GameIdleTime = TimeSpan.FromSeconds(30),
+			MouseIdleTime = TimeSpan.FromSeconds(60),
+		};
+
+		public static void DefaultConfig(IniData data)
+		{
+			var config = data[ConfigSectionName];
+			config[nameof(GameIdleTime)] = Default.GameIdleTime.TotalSeconds.ToString();
+			config[nameof(MouseIdleTime)] = Default.MouseIdleTime.TotalSeconds.ToString();
 		}
 
-		public readonly List<List<KeyConfig>> KeySets;
+		public static void DefaultKeySets(IniData data)
+		{
+			var keySet = data["KeySet0"];
+			keySet["W"] = "0.7";
+			keySet["A"] = "0.3";
+			keySet["D"] = "0.3";
+			keySet = data["KeySet1"];
+			keySet["1"] = "0.2";
+			keySet["2"] = "0.2";
+			keySet["F1"] = "0.2";
+			keySet["Ctrl | Tab"] = "0.2";
+			keySet["Shift | Q"] = "0.2";
+			keySet["Alt | E"] = "0.2";
+			keySet["Ctrl | Shift | Alt | `"] = "0.2";
+		}
 
-		public Config(string path) : this(Parser.ReadFile(path))
+		public TimeSpan GameIdleTime { get; private set; }
+		public TimeSpan MouseIdleTime { get; private set; }
+		public List<List<KeyConfig>> KeySets { get; private set; }
+
+		Config()
 		{
 		}
 
-		public Config(IniData data)
+		public Config(string path)
 		{
-			KeySets = data.Sections
-				.Where(section => section.Keys.Count > 0 && section.SectionName.StartsWith("KeySet"))
-				.Select(section => section.Keys.Select(KeyConfig.From).ToList()).ToList();
+			var data = new IniData();
+			DefaultConfig(data);
+			if (File.Exists(path)) data.Merge(Parser.ReadFile(path));
+			else DefaultKeySets(data);
+			Parser.WriteFile(path, data);
+			var config = data[ConfigSectionName];
+			GameIdleTime = TimeSpan.FromSeconds(
+				config.GetKeyData(nameof(GameIdleTime), ConfigSectionName)?.ParseNum(ConfigSectionName) ??
+				Default.GameIdleTime.TotalSeconds);
+			MouseIdleTime = TimeSpan.FromSeconds(
+				config.GetKeyData(nameof(MouseIdleTime), ConfigSectionName)?.ParseNum(ConfigSectionName) ??
+				Default.MouseIdleTime.TotalSeconds);
+			KeySets = data.Sections.Where(s => s.Keys.Count > 0 && s.SectionName.StartsWith("KeySet"))
+				.Select(s => s.Keys.Select(keyData => KeyConfig.From(keyData, s.SectionName)).ToList()).ToList();
 		}
 	}
 
 	public class KeyConfig
 	{
 		public VirtualKey Key;
-		public int Duration;
+		public TimeSpan Duration;
 		public bool Ctrl;
 		public bool Shift;
 		public bool Alt;
@@ -61,14 +85,14 @@ namespace WowOnlineKeeper
 			if (Ctrl) s_Builder.Append("CTRL").Append(" | ");
 			if (Shift) s_Builder.Append("SHIFT").Append(" | ");
 			if (Alt) s_Builder.Append("ALT").Append(" | ");
-			string str = s_Builder.Append(Key.KeyToStr()).Append(" = ").Append(Duration).ToString();
+			string str = s_Builder.Append(Key.KeyToStr()).Append(" = ").Append(Duration.TotalSeconds).ToString();
 			s_Builder.Clear();
 			return str;
 		}
 
 		static readonly StringBuilder s_Builder = new StringBuilder();
 
-		public static KeyConfig From(KeyData data)
+		public static KeyConfig From(KeyData data, string section)
 		{
 			var config = new KeyConfig();
 			var array = data.KeyName.ToUpperInvariant().Split('|');
@@ -79,7 +103,7 @@ namespace WowOnlineKeeper
 				{
 					config.Key = str.StrToKey();
 					if (config.Key == VirtualKey.VK_NO_KEY)
-						Console.Error.WriteLine($"Invalid key: {str} at {data.KeyName}={data.Value}");
+						Console.Error.WriteLine($"Invalid key: {str} at [{section}] {data.KeyName} = {data.Value}");
 				}
 				else
 				{
@@ -95,14 +119,14 @@ namespace WowOnlineKeeper
 							config.Alt = true;
 							break;
 						default:
-							Console.Error.WriteLine($"Invalid modifier: {str} at {data.KeyName}={data.Value}");
+							string message = $"Invalid modifier: {str} at [{section}] {data.KeyName} = {data.Value}";
+							Console.Error.WriteLine(message);
 							break;
 					}
 				}
 			}
 
-			if (!int.TryParse(data.Value, out config.Duration))
-				Console.Error.WriteLine($"Invalid duration: {data.Value} at {data.KeyName}={data.Value}");
+			config.Duration = TimeSpan.FromSeconds(data.ParseNum(section) ?? 0.2);
 			return config;
 		}
 	}
