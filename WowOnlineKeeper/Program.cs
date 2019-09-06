@@ -1,9 +1,9 @@
 ﻿namespace WowOnlineKeeper
 {
-	using PInvoke;
 	using System;
 	using System.Collections.Generic;
 	using System.Diagnostics;
+	using System.Linq;
 	using System.Threading.Tasks;
 	using static PInvoke.User32;
 
@@ -43,12 +43,12 @@
 						var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
 						var keyConfig = keySet[m_Random.Next(keySet.Count)];
 						Console.WriteLine($"{m_Now.ToString()}\t{keyConfig}");
-						await game.Key(keyConfig);
+						await game.Window.Key(keyConfig);
 						if (m_Now - m_LastMouseMoveTime >= TimeSpan.FromSeconds(30))
 						{
-							GetWindowRect(game.Process.MainWindowHandle, out var rect);
+							GetWindowRect(game.Window.Handle, out var rect);
 							Point point = ((rect.right - rect.left) / 2, (int) ((rect.bottom - rect.top) * 0.917));
-							await game.Click(point, TimeSpan.FromSeconds(0.2));
+							await game.Window.Click(point, TimeSpan.FromSeconds(0.2));
 						}
 					}
 				}
@@ -88,60 +88,25 @@
 			{
 				int processId = process.Id;
 				if (!m_Games.TryGetValue(processId, out var item))
-					item = new Game {Process = process, LastInputTime = m_Now};
+					item = new Game {Window = new Window(process.MainWindowHandle), LastInputTime = m_Now};
 				m_GamesSwap[processId] = item;
 			}
 
 			(m_Games, m_GamesSwap) = (m_GamesSwap, m_Games);
 		}
+
+		async Task Launch()
+		{
+			var battleNet = new Window(Process.GetProcessesByName("Battle.net")
+				.First(process => process.MainWindowHandle != IntPtr.Zero).MainWindowHandle);
+			GetWindowRect(battleNet.Handle, out var rect);
+			await battleNet.Click((320, rect.bottom - rect.top - 64), TimeSpan.FromSeconds(200));
+		}
 	}
 
 	class Game
 	{
-		public Process Process;
+		public Window Window;
 		public DateTime LastInputTime;
-
-		public async Task Key(KeyConfig config)
-		{
-			if (config.Ctrl) KeyDown(VirtualKey.VK_LCONTROL);
-			if (config.Shift) KeyDown(VirtualKey.VK_LSHIFT);
-			if (config.Alt) KeyDown(VirtualKey.VK_LMENU);
-			await Key(config.Key, config.Duration);
-			if (config.Ctrl) KeyUp(VirtualKey.VK_LCONTROL);
-			if (config.Shift) KeyUp(VirtualKey.VK_LSHIFT);
-			if (config.Alt) KeyUp(VirtualKey.VK_LMENU);
-		}
-
-		public async Task Key(VirtualKey key, TimeSpan duration)
-		{
-			if (key == VirtualKey.VK_NO_KEY) return;
-			KeyDown(key);
-			await Task.Delay(duration);
-			KeyUp(key);
-		}
-
-		public void KeyDown(VirtualKey key)
-		{
-			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYDOWN, (IntPtr) key, IntPtr.Zero);
-		}
-
-		public void KeyUp(VirtualKey key)
-		{
-			PostMessage(Process.MainWindowHandle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
-		}
-
-		public async Task Click(Point point, TimeSpan delay)
-		{
-			GetCursorPos(out var pos);
-			POINT pt = point;
-			ClientToScreen(Process.MainWindowHandle, ref pt);
-			SetCursorPos(pt.x, pt.y);
-			var lParam = point.ToLParam();
-			PostMessage(Process.MainWindowHandle, WindowMessage.WM_MOUSEMOVE, IntPtr.Zero, lParam);
-			PostMessage(Process.MainWindowHandle, WindowMessage.WM_LBUTTONDOWN, (IntPtr) 1, lParam);
-			PostMessage(Process.MainWindowHandle, WindowMessage.WM_LBUTTONUP, IntPtr.Zero, lParam);
-			await Task.Delay(delay);
-			SetCursorPos(pos.x, pos.y);
-		}
 	}
 }
