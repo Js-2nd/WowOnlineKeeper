@@ -9,7 +9,7 @@
 
 	public sealed class Program
 	{
-		public const string Version = "0.2.0";
+		public const string Version = "0.3.0";
 		const string ConfigPath = nameof(WowOnlineKeeper) + ".ini";
 
 		static async Task Main()
@@ -37,18 +37,29 @@
 				bool act = false;
 				foreach (var game in m_Games.Values)
 				{
-					if (m_Now - game.LastInputTime >= TimeSpan.FromSeconds(30))
+					if (m_Now - game.LastInputTime >= m_Config.GameIdleTime)
 					{
-						act = true;
-						var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
-						var keyConfig = keySet[m_Random.Next(keySet.Count)];
-						Console.WriteLine($"{m_Now.ToString()}\t{keyConfig}");
-						await game.Window.Key(keyConfig);
-						if (m_Now - m_LastMouseMoveTime >= TimeSpan.FromSeconds(30))
+						if (m_Config.KeySets.Count > 0)
 						{
-							GetWindowRect(game.Window.Handle, out var rect);
-							Point point = ((rect.right - rect.left) / 2, (int) ((rect.bottom - rect.top) * 0.917));
-							await game.Window.Click(point, TimeSpan.FromSeconds(0.2));
+							var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
+							if (keySet.Count > 0)
+							{
+								act = true;
+								var keyConfig = keySet[m_Random.Next(keySet.Count)];
+								Console.WriteLine($"{m_Now}\t{keyConfig}");
+								await game.Window.Key(keyConfig);
+							}
+						}
+
+						if (m_Now - m_LastMouseMoveTime >= m_Config.MouseIdleTime)
+						{
+							var size = game.Window.Size;
+							// click enter game
+							await game.Window.Click(size.X * 0.5, size.Y * 0.917);
+							// click center popup
+							await game.Window.Click(size.X * 0.5, size.Y * 0.513);
+							// click quit game
+							await game.Window.Click(size.X * 0.5 + size.Y * 0.851, size.Y * 0.935);
 						}
 					}
 				}
@@ -87,26 +98,51 @@
 			foreach (var process in Process.GetProcessesByName("Wow"))
 			{
 				int processId = process.Id;
-				if (!m_Games.TryGetValue(processId, out var item))
-					item = new Game {Window = new Window(process.MainWindowHandle), LastInputTime = m_Now};
+				if (!m_Games.TryGetValue(processId, out var item)) item = new Game(process);
 				m_GamesSwap[processId] = item;
 			}
 
 			(m_Games, m_GamesSwap) = (m_GamesSwap, m_Games);
 		}
 
-		async Task Launch()
+		async Task<bool> Launch()
 		{
-			var battleNet = new Window(Process.GetProcessesByName("Battle.net")
-				.First(process => process.MainWindowHandle != IntPtr.Zero).MainWindowHandle);
-			GetWindowRect(battleNet.Handle, out var rect);
-			await battleNet.Click((320, rect.bottom - rect.top - 64), TimeSpan.FromSeconds(200));
+			var process = Process.GetProcessesByName("Battle.net")
+				.FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero);
+			if (process == null) return false;
+			var battleNet = new Window(process.MainWindowHandle);
+			var size = battleNet.Size;
+			await battleNet.Click((320, size.Y - 64), TimeSpan.FromSeconds(0.2));
+			await Task.Delay(TimeSpan.FromSeconds(3));
+			process = Process.GetProcessesByName("Wow").FirstOrDefault();
+			if (process == null) return false;
+			var wow = new Window(process.MainWindowHandle);
+			await Task.Delay(TimeSpan.FromSeconds(7));
+			size = wow.Size;
+			// click second region
+			await wow.Click(size.X * 0.5 - size.Y * 0.25, size.Y * 0.833);
+			await Task.Delay(TimeSpan.FromSeconds(1));
+			// click first server
+			await wow.Click(size.X * 0.5, size.Y * 0.25);
+			await Task.Delay(TimeSpan.FromSeconds(1));
+			// click confirm
+			await wow.Click(size.X * 0.5 + size.Y * 0.153, size.Y * 0.793);
+			await Task.Delay(TimeSpan.FromSeconds(10));
+			return true;
 		}
 	}
 
 	class Game
 	{
+		public Process Process;
 		public Window Window;
 		public DateTime LastInputTime;
+
+		public Game(Process process)
+		{
+			Process = process;
+			Window = new Window(process.MainWindowHandle);
+			LastInputTime = DateTime.Now;
+		}
 	}
 }

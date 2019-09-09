@@ -10,6 +10,15 @@ namespace WowOnlineKeeper
 		public readonly IntPtr Handle;
 		public Window(IntPtr handle) => Handle = handle;
 
+		public Point Size
+		{
+			get
+			{
+				GetWindowRect(Handle, out var rect);
+				return (rect.right - rect.left, rect.bottom - rect.top);
+			}
+		}
+
 		public async Task Key(KeyConfig config)
 		{
 			if (config.Ctrl) KeyDown(VirtualKey.VK_LCONTROL);
@@ -39,7 +48,9 @@ namespace WowOnlineKeeper
 			PostMessage(Handle, WindowMessage.WM_IME_KEYUP, (IntPtr) key, IntPtr.Zero);
 		}
 
-		public async Task Click(Point point, TimeSpan delay)
+		public async Task Click(double x, double y, TimeSpan? delay = null) => await Click(((int) x, (int) y), delay);
+
+		public async Task Click(Point point, TimeSpan? delay = null)
 		{
 			GetCursorPos(out var pos);
 			POINT pt = point;
@@ -49,7 +60,7 @@ namespace WowOnlineKeeper
 			PostMessage(Handle, WindowMessage.WM_MOUSEMOVE, IntPtr.Zero, lParam);
 			PostMessage(Handle, WindowMessage.WM_LBUTTONDOWN, (IntPtr) 1, lParam);
 			PostMessage(Handle, WindowMessage.WM_LBUTTONUP, IntPtr.Zero, lParam);
-			await Task.Delay(delay);
+			await Task.Delay(delay ?? TimeSpan.FromSeconds(0.2));
 			SetCursorPos(pos.x, pos.y);
 		}
 	}
