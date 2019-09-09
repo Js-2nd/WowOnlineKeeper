@@ -29,38 +29,48 @@
 		async Task Run()
 		{
 			m_Config = new Config(ConfigPath);
+			Console.WriteLine($@"自动启动游戏需满足以下条件
+1.鼠标空闲{m_Config.MouseIdleTime.TotalSeconds}秒
+2.任务栏中存在战网窗口且未最小化
+3.战网边栏已选择到魔兽世界
+4.未开启任何其他战网子窗口(设置、好友等)");
 			InitInput();
 			while (true)
 			{
 				m_Now = DateTime.Now;
+				bool mouseIdle = m_Now - m_LastMouseMoveTime >= m_Config.MouseIdleTime;
 				UpdateGames();
+				if (m_Games.Count == 0 && mouseIdle)
+				{
+					Console.WriteLine($"{m_Now}\tLaunch Wow");
+					await Launch();
+					continue;
+				}
+
 				bool act = false;
 				foreach (var game in m_Games.Values)
 				{
-					if (m_Now - game.LastInputTime >= m_Config.GameIdleTime)
+					if (m_Now - game.LastInputTime >= m_Config.GameIdleTime && m_Config.KeySets.Count > 0)
 					{
-						if (m_Config.KeySets.Count > 0)
+						var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
+						if (keySet.Count > 0)
 						{
-							var keySet = m_Config.KeySets[m_Random.Next(m_Config.KeySets.Count)];
-							if (keySet.Count > 0)
-							{
-								act = true;
-								var keyConfig = keySet[m_Random.Next(keySet.Count)];
-								Console.WriteLine($"{m_Now}\t{keyConfig}");
-								await game.Window.Key(keyConfig);
-							}
+							act = true;
+							var keyConfig = keySet[m_Random.Next(keySet.Count)];
+							Console.WriteLine($"{m_Now}\t{keyConfig}");
+							await game.Window.Key(keyConfig);
 						}
+					}
 
-						if (m_Now - m_LastMouseMoveTime >= m_Config.MouseIdleTime)
-						{
-							var size = game.Window.Size;
-							// click enter game
-							await game.Window.Click(size.X * 0.5, size.Y * 0.917);
-							// click center popup
-							await game.Window.Click(size.X * 0.5, size.Y * 0.513);
-							// click quit game
-							await game.Window.Click(size.X * 0.5 + size.Y * 0.851, size.Y * 0.935);
-						}
+					if (mouseIdle)
+					{
+						var size = game.Window.Size;
+						// click enter game
+						await game.Window.Click(size.X * 0.5, size.Y * 0.917);
+						// click center popup
+						await game.Window.Click(size.X * 0.5, size.Y * 0.513);
+						// click quit game
+						await game.Window.Click(size.X * 0.5 + size.Y * 0.851, size.Y * 0.935);
 					}
 				}
 
@@ -127,7 +137,7 @@
 			await Task.Delay(TimeSpan.FromSeconds(1));
 			// click confirm
 			await wow.Click(size.X * 0.5 + size.Y * 0.153, size.Y * 0.793);
-			await Task.Delay(TimeSpan.FromSeconds(10));
+			await Task.Delay(TimeSpan.FromSeconds(5));
 			return true;
 		}
 	}

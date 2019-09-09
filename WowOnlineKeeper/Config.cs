@@ -18,7 +18,7 @@ namespace WowOnlineKeeper
 		public static readonly Config Default = new Config
 		{
 			GameIdleTime = TimeSpan.FromSeconds(30),
-			MouseIdleTime = TimeSpan.FromSeconds(60),
+			MouseIdleTime = TimeSpan.FromSeconds(20),
 		};
 
 		public static void DefaultConfig(IniData data)
@@ -57,7 +57,7 @@ namespace WowOnlineKeeper
 			var data = new IniData();
 			DefaultConfig(data);
 			if (File.Exists(path)) data.Merge(Parser.ReadFile(path));
-			else DefaultKeySets(data);
+//			else DefaultKeySets(data);
 			Parser.WriteFile(path, data);
 			var config = data[ConfigSectionName];
 			GameIdleTime = TimeSpan.FromSeconds(
