@@ -42,8 +42,8 @@
 				UpdateGames();
 				if (m_Games.Count == 0 && mouseIdle)
 				{
-					Console.WriteLine($"{m_Now}\tLaunch Wow");
 					await Launch();
+					await Task.Delay(TimeSpan.FromSeconds(5));
 					continue;
 				}
 
@@ -120,6 +120,7 @@
 			var process = Process.GetProcessesByName("Battle.net")
 				.FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero);
 			if (process == null) return false;
+			Console.WriteLine($"{m_Now}\tLaunch Wow");
 			var battleNet = new Window(process.MainWindowHandle);
 			var size = battleNet.Size;
 			await battleNet.Click((320, size.Y - 64), TimeSpan.FromSeconds(0.2));
@@ -137,7 +138,6 @@
 			await Task.Delay(TimeSpan.FromSeconds(1));
 			// click confirm
 			await wow.Click(size.X * 0.5 + size.Y * 0.153, size.Y * 0.793);
-			await Task.Delay(TimeSpan.FromSeconds(5));
 			return true;
 		}
 	}
