@@ -9,7 +9,9 @@
 
 	public sealed class Program
 	{
-		public const string Version = "0.3.0";
+		public const string Version = "0.4.0";
+		const string BattleNetProcessName = "Battle.net";
+		const string WowProcessName = "WowClassic";
 		const string ConfigPath = nameof(WowOnlineKeeper) + ".ini";
 
 		static async Task Main()
@@ -105,7 +107,7 @@
 		void UpdateGames()
 		{
 			m_GamesSwap.Clear();
-			foreach (var process in Process.GetProcessesByName("Wow"))
+			foreach (var process in Process.GetProcessesByName(WowProcessName))
 			{
 				int processId = process.Id;
 				if (!m_Games.TryGetValue(processId, out var item)) item = new Game(process);
@@ -117,7 +119,7 @@
 
 		async Task<bool> Launch()
 		{
-			var process = Process.GetProcessesByName("Battle.net")
+			var process = Process.GetProcessesByName(BattleNetProcessName)
 				.FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero);
 			if (process == null) return false;
 			Console.WriteLine($"{m_Now}\tLaunch Wow");
@@ -125,10 +127,11 @@
 			var size = battleNet.Size;
 			await battleNet.Click((320, size.Y - 64), TimeSpan.FromSeconds(0.2));
 			await Task.Delay(TimeSpan.FromSeconds(3));
-			process = Process.GetProcessesByName("Wow").FirstOrDefault();
+			process = Process.GetProcessesByName(WowProcessName).FirstOrDefault();
 			if (process == null) return false;
 			var wow = new Window(process.MainWindowHandle);
 			await Task.Delay(TimeSpan.FromSeconds(7));
+			return true; // Wow can auto enter last selected server now
 			size = wow.Size;
 			// click second region
 			await wow.Click(size.X * 0.5 - size.Y * 0.25, size.Y * 0.833);
